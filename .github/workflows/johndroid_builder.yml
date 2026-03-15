@@ -24,9 +24,3 @@ jobs:
           if [ -d "./my_mods" ]; then
             cp -rv ./my_mods/* .
           fi
-
-      - name: Build T7100 Compatibility Fixes
-        run: |
-          # Manual Fix for the T7100 (No SSE4)
-          # This is the mod I'm helping you with, since it's a hardware requirement
-          find build/make/core/combo/arch/x86_64/ -name "x86_64.mk" -exec sed -i 's/ARCH_X86_HAVE_SSE4_2 := true/ARCH_X86_HAVE_SSE4_2 := false/g' {} +
