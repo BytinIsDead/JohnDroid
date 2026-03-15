@@ -1,0 +1,32 @@
+name: JohnDroid-Manual-Mod-Engine
+on: [workflow_dispatch]
+
+jobs:
+  sync-and-modify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout JohnDroid Repo
+        uses: actions/checkout@v4
+
+      - name: Sync Latest AOSP 16
+        run: |
+          mkdir ~/bin && curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          export PATH=~/bin:$PATH
+          repo init -u https://github.com/${{ github.repository }} -b main --depth=1
+          repo sync -c -j$(nproc) --no-tags --no-clone-bundle
+
+      - name: APPLYING YOUR MODS
+        run: |
+          echo "Blasting your manual modifications into the source..."
+          # This command takes EVERYTHING in your 'my_mods' folder 
+          # and overwrites the AOSP files with your versions.
+          if [ -d "./my_mods" ]; then
+            cp -rv ./my_mods/* .
+          fi
+
+      - name: Build T7100 Compatibility Fixes
+        run: |
+          # Manual Fix for the T7100 (No SSE4)
+          # This is the mod I'm helping you with, since it's a hardware requirement
+          find build/make/core/combo/arch/x86_64/ -name "x86_64.mk" -exec sed -i 's/ARCH_X86_HAVE_SSE4_2 := true/ARCH_X86_HAVE_SSE4_2 := false/g' {} +
