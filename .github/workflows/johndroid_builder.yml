@@ -1,44 +1,53 @@
-name: JohnDroid-Manual-Mod-Engine
+name: JohnDroid-Official-Engine
 on: [workflow_dispatch]
 
 jobs:
-  sync-and-modify:
+  sync-and-mod:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout JohnDroid Repo
         uses: actions/checkout@v4
 
-     - name: Sync Latest AOSP 16
+      - name: Maximize Disk Space
+        uses: easimon/maximize-build-disk-space@main
+        with:
+          root-reserve-mb: 1024
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+
+      - name: Setup Repo Tool
         run: |
-          mkdir ~/bin && curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          mkdir ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
-          export PATH=~/bin:$PATH
-          
-          # 1. Initialize using the OFFICIAL Google AOSP manifest
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Sync AOSP 16 (T7100 Optimized)
+        run: |
+          # Initialize using the NEW 2026 'android-latest-release' branch
           repo init -u https://android.googlesource.com/platform/manifest -b android-latest-release --depth=1
           
-          # 2. Now, tell repo to look at YOUR JohnDroid repo for local overrides
-          # We create a local_manifests directory (this is the 'Pro' way)
+          # Inject your JohnDroid manifest so it doesn't fail
           mkdir -p .repo/local_manifests
-          
-          # 3. Copy YOUR manifest into the local_manifests folder
-          # This tells repo: "Use Google's stuff, but if JohnDroid says otherwise, listen to JohnDroid."
           cp $GITHUB_WORKSPACE/default.xml .repo/local_manifests/johndroid.xml
           
-          # 4. Sync everything
-          repo sync -c -j$(nproc) --no-tags --no-clone-bundle
-          
-      - name: APPLYING YOUR MODS
+          # Sync only what we need for x86 (saves 50GB of space)
+          repo sync -c -j$(nproc) --no-tags --no-clone-bundle --optimized-fetch
+
+      - name: THE BOOM (Manual Overwrites)
         run: |
-          echo "Blasting your manual modifications into the source..."
-          # This command takes EVERYTHING in your 'my_mods' folder 
-          # and overwrites the AOSP files with your versions.
-          if [ -d "./my_mods" ]; then
-            cp -rv ./my_mods/* .
+          if [ -d "$GITHUB_WORKSPACE/my_mods" ]; then
+            cp -rv $GITHUB_WORKSPACE/my_mods/* .
+          else
+            echo "No 'my_mods' folder found. Just running base AOSP."
           fi
 
-      - name: Build T7100 Compatibility Fixes
+      - name: T7100 SSE4 Compatibility Fix
         run: |
-          # Manual Fix for the T7100 (No SSE4)
-          # This is the mod I'm helping you with, since it's a hardware requirement
+          # This is the "Illegal Instruction" fix for your T7100 CPU
           find build/make/core/combo/arch/x86_64/ -name "x86_64.mk" -exec sed -i 's/ARCH_X86_HAVE_SSE4_2 := true/ARCH_X86_HAVE_SSE4_2 := false/g' {} +
+          find build/make/core/combo/arch/x86_64/ -name "x86_64.mk" -exec sed -i 's/ARCH_X86_HAVE_SSE4_1 := true/ARCH_X86_HAVE_SSE4_1 := false/g' {} +
+          # Enable 'Android Go' mode for the T61's low RAM
+          echo "PRODUCT_PROPERTY_OVERRIDES += ro.config.low_ram=true" >> build/make/target/product/base_system.mk
