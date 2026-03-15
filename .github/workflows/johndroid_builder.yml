@@ -19,35 +19,29 @@ jobs:
 
       - name: Setup Repo Tool
         run: |
-          mkdir ~/bin
+          mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Sync AOSP 16 (T7100 Optimized)
+      - name: Sync AOSP 16
         run: |
-          # Initialize using the NEW 2026 'android-latest-release' branch
+          export PATH=$HOME/bin:$PATH
           repo init -u https://android.googlesource.com/platform/manifest -b android-latest-release --depth=1
-          
-          # Inject your JohnDroid manifest so it doesn't fail
           mkdir -p .repo/local_manifests
           cp $GITHUB_WORKSPACE/default.xml .repo/local_manifests/johndroid.xml
-          
-          # Sync only what we need for x86 (saves 50GB of space)
           repo sync -c -j$(nproc) --no-tags --no-clone-bundle --optimized-fetch
 
-      - name: THE BOOM (Manual Overwrites)
+      - name: Apply Manual Mods
         run: |
           if [ -d "$GITHUB_WORKSPACE/my_mods" ]; then
             cp -rv $GITHUB_WORKSPACE/my_mods/* .
           else
-            echo "No 'my_mods' folder found. Just running base AOSP."
+            echo "No mods folder found."
           fi
 
-      - name: T7100 SSE4 Compatibility Fix
+      - name: T7100 Compatibility Fix
         run: |
-          # This is the "Illegal Instruction" fix for your T7100 CPU
           find build/make/core/combo/arch/x86_64/ -name "x86_64.mk" -exec sed -i 's/ARCH_X86_HAVE_SSE4_2 := true/ARCH_X86_HAVE_SSE4_2 := false/g' {} +
           find build/make/core/combo/arch/x86_64/ -name "x86_64.mk" -exec sed -i 's/ARCH_X86_HAVE_SSE4_1 := true/ARCH_X86_HAVE_SSE4_1 := false/g' {} +
-          # Enable 'Android Go' mode for the T61's low RAM
           echo "PRODUCT_PROPERTY_OVERRIDES += ro.config.low_ram=true" >> build/make/target/product/base_system.mk
