@@ -8,14 +8,26 @@ jobs:
       - name: Checkout JohnDroid Repo
         uses: actions/checkout@v4
 
-      - name: Sync Latest AOSP 16
+     - name: Sync Latest AOSP 16
         run: |
           mkdir ~/bin && curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           export PATH=~/bin:$PATH
-          repo init -u https://github.com/${{ github.repository }} -b main --depth=1
+          
+          # 1. Initialize using the OFFICIAL Google AOSP manifest
+          repo init -u https://android.googlesource.com/platform/manifest -b android-latest-release --depth=1
+          
+          # 2. Now, tell repo to look at YOUR JohnDroid repo for local overrides
+          # We create a local_manifests directory (this is the 'Pro' way)
+          mkdir -p .repo/local_manifests
+          
+          # 3. Copy YOUR manifest into the local_manifests folder
+          # This tells repo: "Use Google's stuff, but if JohnDroid says otherwise, listen to JohnDroid."
+          cp $GITHUB_WORKSPACE/default.xml .repo/local_manifests/johndroid.xml
+          
+          # 4. Sync everything
           repo sync -c -j$(nproc) --no-tags --no-clone-bundle
-
+          
       - name: APPLYING YOUR MODS
         run: |
           echo "Blasting your manual modifications into the source..."
