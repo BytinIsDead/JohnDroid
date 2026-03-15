@@ -8,14 +8,15 @@ jobs:
       - name: Checkout JohnDroid Repo
         uses: actions/checkout@v4
 
-      - name: Maximize Disk Space
-        uses: easimon/maximize-build-disk-space@main
-        with:
-          root-reserve-mb: 1024
-          swap-size-mb: 1024
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
+      - name: Manual Disk Cleanup
+        run: |
+          echo "Clearing out the junk to make room for AOSP 16..."
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h
 
       - name: Setup Repo Tool
         run: |
@@ -27,21 +28,27 @@ jobs:
       - name: Sync AOSP 16
         run: |
           export PATH=$HOME/bin:$PATH
+          # Initializing with the latest 2026 branch
           repo init -u https://android.googlesource.com/platform/manifest -b android-latest-release --depth=1
+          
           mkdir -p .repo/local_manifests
           cp $GITHUB_WORKSPACE/default.xml .repo/local_manifests/johndroid.xml
+          
+          # Optimized sync for the T61/Wolfdale (x86_64 only)
           repo sync -c -j$(nproc) --no-tags --no-clone-bundle --optimized-fetch
 
       - name: Apply Manual Mods
         run: |
           if [ -d "$GITHUB_WORKSPACE/my_mods" ]; then
+            echo "Applying JohnDroid custom mods..."
             cp -rv $GITHUB_WORKSPACE/my_mods/* .
           else
-            echo "No mods folder found."
+            echo "No 'my_mods' folder found. Sync complete."
           fi
 
-      - name: T7100 Compatibility Fix
+      - name: T7100 SSE4 Compatibility Fix
         run: |
+          echo "Patching for T7100 Core 2 Duo compatibility..."
           find build/make/core/combo/arch/x86_64/ -name "x86_64.mk" -exec sed -i 's/ARCH_X86_HAVE_SSE4_2 := true/ARCH_X86_HAVE_SSE4_2 := false/g' {} +
           find build/make/core/combo/arch/x86_64/ -name "x86_64.mk" -exec sed -i 's/ARCH_X86_HAVE_SSE4_1 := true/ARCH_X86_HAVE_SSE4_1 := false/g' {} +
           echo "PRODUCT_PROPERTY_OVERRIDES += ro.config.low_ram=true" >> build/make/target/product/base_system.mk
